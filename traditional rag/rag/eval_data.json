@@ -1,0 +1,14 @@
+[
+  {
+    "question": "Who founded xAI?",
+    "gold_answers": ["Elon Musk"]
+  },
+  {
+    "question": "What platforms can Grok be accessed through?",
+    "gold_answers": ["grok.com, x.com, iOS/Android app"]
+  },
+  {
+    "question": "What is xAI's goal?",
+    "gold_answers": ["Understand the true nature of the universe"]
+  }
+]
