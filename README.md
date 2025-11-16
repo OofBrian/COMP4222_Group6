@@ -21,15 +21,19 @@ This repository contains scripts for evaluating models with and without RAG (Ret
    export OPENAI_API_KEY=<your_openai_api_key>  # Replace <your_openai_api_key> with your DeepSeek API key
 
 3. Running the scripts:
-   For No_Rag_main.py:
+   
+   - For No_Rag_main.py:
    Open the file and manually update the dataset name inside the script to the desired dataset.
    Run the script:
    ```bash
    python No_Rag_main.py
+   ```
    
-   For Hipporag_main.py:
+   - For Hipporag_main.py:
    Run the script directly by specifying the dataset name as a command-line argument:
    ```bash
    python Hipporag_main.py --<dataset_name>
+   ```
    
-## Note: All available datasets for evaluation are stored in the /reproduce/dataset directory. You only need to include the dataset name in the script or command.
+## Note: 
+All available datasets for evaluation are stored in the /reproduce/dataset directory. You only need to include the dataset name in the script or command.
