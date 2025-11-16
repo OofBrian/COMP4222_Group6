@@ -223,7 +223,36 @@ class BaseConfig:
         metadata={"help": "Length of the corpus to use."}
     )
     
-    
+    ## Specialize config for PPR (4222 project)
+    use_variable_alpha: bool = field(
+        default=False,
+        metadata={"help": "Whether to use distance-dependent variable teleportation probability in PPR (custom MC implementation). If False, uses standard igraph PPR."}
+    )
+    variable_alpha_base: float = field(
+        default=0.15,
+        metadata={"help": "Base alpha (teleport prob) for distance=0 (seeds)."}
+    )
+    variable_alpha_low: float = field(
+        default=0.1,
+        metadata={"help": "Lower alpha for 1-hop nodes."}
+    )
+    variable_alpha_high: float = field(
+        default=0.05,
+        metadata={"help": "Higher alpha for nodes at distance >= variable_alpha_k_hop."}
+    )
+    variable_alpha_k_hop: int = field(
+        default=3,
+        metadata={"help": "Hop threshold where alpha switches from low to high (e.g., high for d >= 2)."}
+    )
+    variable_ppr_num_walks: int = field(
+        default=1000,
+        metadata={"help": "Number of Monte Carlo walks for approximating variable-alpha PPR (higher for better precision, but slower)."}
+    )
+    variable_ppr_max_hops: int = field(
+        default=20,
+        metadata={"help": "Maximum hops per walk to prevent infinite loops in case of cycles (safety cap)."}
+    )
+     
     def __post_init__(self):
         if self.save_dir is None: # If save_dir not given
             if self.dataset is None: self.save_dir = 'outputs' # running freely
