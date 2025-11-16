@@ -43,8 +43,7 @@ class NVEmbedV2EmbeddingModel(BaseEmbeddingModel):
             "norm": self.global_config.embedding_return_as_normalized,
             # "max_seq_length": self.global_config.embedding_max_seq_len,
             "model_init_params": {
-                # "model_name_or_path": self.embedding_model_name2mode_name_or_path[self.embedding_model_name],
-                "pretrained_model_name_or_path": "/data/mycai/HippoRAG/models/models--nvidia--NV-Embed-v2/snapshots/3fa59658547db50a1e8e3346cf057fd0c77ed6ef",
+                "model_name_or_path": self.embedding_model_name2mode_name_or_path[self.embedding_model_name],
                 "trust_remote_code": True,
                 'device_map': "auto",  # added this line to use multiple GPUs
                 "torch_dtype": self.global_config.embedding_model_dtype,
