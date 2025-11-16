@@ -4,7 +4,7 @@ from tqdm import tqdm  # 用于进度条显示
 from typing import List, Dict, Tuple, Any
 from openai import OpenAI
 import numpy as np
-from eval import evaluate_qa
+from eval_functions import evaluate_qa
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
