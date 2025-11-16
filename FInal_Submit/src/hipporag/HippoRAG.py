@@ -16,6 +16,9 @@ import numpy as np
 from collections import defaultdict
 import re
 import time
+## imports for ppr (4222 project)
+from collections import deque
+import math  # For inf in distances
 
 from .llm import _get_llm_class, BaseLLM
 from .embedding_model import _get_embedding_model_class, BaseEmbeddingModel
@@ -444,6 +447,11 @@ class HippoRAG:
             overall_retrieval_result, example_retrieval_results = retrieval_recall_evaluator.calculate_metric_scores(gold_docs=gold_docs, retrieved_docs=[retrieval_result.docs for retrieval_result in retrieval_results], k_list=k_list)
             logger.info(f"Evaluation results for retrieval: {overall_retrieval_result}")
 
+            recall_file = os.path.join(self.working_dir, f"hipporag_recall@{','.join(map(str, k_list))}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+            with open(recall_file, 'w') as f:
+                json.dump(overall_retrieval_result, f, indent=4)
+            logger.info(f"Saved HippoRAG recall@k results to {recall_file}")
+
             return retrieval_results, overall_retrieval_result
         else:
             return retrieval_results
@@ -589,6 +597,11 @@ class HippoRAG:
                 k_list=k_list)
             logger.info(f"Evaluation results for retrieval: {overall_retrieval_result}")
 
+            recall_file = os.path.join(self.working_dir, f"dpr_recall@{','.join(map(str, k_list))}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+            with open(recall_file, 'w') as f:
+                json.dump(overall_retrieval_result, f, indent=4)
+            logger.info(f"Saved DPR recall@k results to {recall_file}")
+
             return retrieval_results, overall_retrieval_result
         else:
             return retrieval_results
@@ -688,11 +701,11 @@ class HippoRAG:
         for query_solution in tqdm(queries, desc="Collecting QA prompts"):
 
             # obtain the retrieved docs
-            retrieved_passages = [query_solution.docs[:self.global_config.qa_top_k]]
+            retrieved_passages = query_solution.docs[:self.global_config.qa_top_k]
 
             prompt_user = ''
-            # for passage in retrieved_passages:
-            #     prompt_user += f'Wikipedia Title: {passage}\n\n'
+            for passage in retrieved_passages:
+                prompt_user += f'Wikipedia Title: {passage}\n\n'
             prompt_user += 'Question: ' + query_solution.question + '\nThought: '
 
             if self.prompt_template_manager.is_template_name_valid(name=f'rag_qa_{self.global_config.dataset}'):
@@ -1467,7 +1480,7 @@ class HippoRAG:
                     number_of_occurs[phrase_id] += 1
 
                 phrases_and_ids.add((phrase, phrase_id))
-
+        """
         phrase_weights /= number_of_occurs
 
         for phrase, phrase_id in phrases_and_ids:
@@ -1479,6 +1492,24 @@ class HippoRAG:
         # calculate average fact score for each phrase
         for phrase, scores in phrase_scores.items():
             linking_score_map[phrase] = float(np.mean(scores))
+        """ #run time error
+
+        # --- SAFE AVERAGING --- (modified to prevent division by zero, run time error) (Comp4222 project)
+        if np.any(number_of_occurs > 0):
+            valid = number_of_occurs > 0
+            phrase_weights[valid] /= number_of_occurs[valid]
+
+        # Build phrase_scores (for linking map)
+        for phrase, phrase_id in phrases_and_ids:
+            if phrase_id is not None:
+                if phrase not in phrase_scores:
+                    phrase_scores[phrase] = []
+                phrase_scores[phrase].append(phrase_weights[phrase_id])
+
+        # calculate average fact score for each phrase
+        for phrase, scores in phrase_scores.items():
+            linking_score_map[phrase] = float(np.mean(scores))
+        # --- END SAFE AVERAGING ---
 
         if link_top_k:
             phrase_weights, linking_score_map = self.get_top_k_weights(link_top_k,
@@ -1595,18 +1626,103 @@ class HippoRAG:
         """
 
         if damping is None: damping = 0.5 # for potential compatibility
-        reset_prob = np.where(np.isnan(reset_prob) | (reset_prob < 0), 0, reset_prob)
-        pagerank_scores = self.graph.personalized_pagerank(
-            vertices=range(len(self.node_name_to_vertex_idx)),
-            damping=damping,
-            directed=False,
-            weights='weight',
-            reset=reset_prob,
-            implementation='prpack'
-        )
+        #reset prob modification for nan or zero values (COMP4222 project)
+        reset_prob = np.nan_to_num(reset_prob, nan=0.0, posinf=0.0, neginf=0.0)
+        reset_prob = np.maximum(reset_prob, 0)  # ensure non-negative
+        #custom ppr (4222 project)
+        if self.global_config.use_variable_alpha:
+            pagerank_scores = self.custom_variable_ppr(reset_prob)
+        else:
+            pagerank_scores = self.graph.personalized_pagerank(
+                vertices=range(len(self.node_name_to_vertex_idx)),
+                damping=damping,
+                directed=False,
+                weights='weight',
+                reset=reset_prob,
+                implementation='prpack'
+            )
 
         doc_scores = np.array([pagerank_scores[idx] for idx in self.passage_node_idxs])
         sorted_doc_ids = np.argsort(doc_scores)[::-1]
         sorted_doc_scores = doc_scores[sorted_doc_ids.tolist()]
 
         return sorted_doc_ids, sorted_doc_scores
+    
+    #custom PPR with distance-dependent teleport probability (4222 project)
+    def custom_variable_ppr(self, reset_prob: np.ndarray) -> List[float]:
+        """
+        Monte-Carlo PPR with *distance-dependent* teleport probability.
+        """
+        n = self.graph.vcount()
+        if n == 0:
+            return [0.0] * n
+
+        # ---- 1. Normalise seed distribution ---------------------------------
+        reset_sum = np.sum(reset_prob)
+        if reset_sum == 0:
+            raise ValueError("Reset probabilities sum to zero – no seeds.")
+        reset_prob = reset_prob / reset_sum
+
+        # ---- 2. Multi-source BFS → min distance to any seed -----------------
+        seeds = [i for i in range(n) if reset_prob[i] > 0]
+        dist = [math.inf] * n
+        for s in seeds:
+            dist[s] = 0
+        q = deque(seeds)
+        visited = set(seeds)
+        while q:
+            u = q.popleft()
+            for v in self.graph.neighbors(u):
+                if v not in visited:
+                    visited.add(v)
+                    dist[v] = dist[u] + 1
+                    q.append(v)
+
+        # ---- 3. **Distance-dependent alpha** (defined *inside* the method) --
+        def alpha_d(d: float) -> float:
+            """Return teleport probability for a node at distance `d`."""
+            cfg = self.global_config
+            if d == 0:                                   # seed itself
+                return cfg.variable_alpha_base
+            if d == 1:                                   # 1-hop neighbours
+                return cfg.variable_alpha_low
+            if d >= cfg.variable_alpha_k_hop:            # far away
+                return cfg.variable_alpha_high
+            # optional linear ramp between low and high for 1 < d < k
+            frac = (d - 1) / (cfg.variable_alpha_k_hop - 1)
+            return cfg.variable_alpha_low + frac * (cfg.variable_alpha_high - cfg.variable_alpha_low)
+
+        # ---- 4. Monte-Carlo walks -------------------------------------------
+        scores = [0.0] * n
+        walks  = self.global_config.variable_ppr_num_walks
+        max_h  = self.global_config.variable_ppr_max_hops
+
+        for _ in range(walks):
+            cur = np.random.choice(n, p=reset_prob)
+            for hop in range(max_h):
+                d = dist[cur]
+
+                # absorb?
+                if np.random.random() < alpha_d(d):
+                    scores[cur] += 1.0 / walks
+                    break
+
+                # move to a neighbour
+                neigh = self.graph.neighbors(cur)
+                if not neigh:                     # dangling node → absorb
+                    scores[cur] += 1.0 / walks
+                    break
+
+                if self.graph.is_weighted():
+                    eids   = [self.graph.get_eid(cur, v) for v in neigh]
+                    ws     = [self.graph.es[eid]['weight'] for eid in eids]
+                    tot_w  = sum(ws)
+                    probs  = [w / tot_w for w in ws]
+                    cur = np.random.choice(neigh, p=probs)
+                else:
+                    cur = np.random.choice(neigh)
+
+            else:                                 # max hops reached → absorb
+                scores[cur] += 1.0 / walks
+
+        return scores
