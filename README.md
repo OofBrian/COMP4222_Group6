@@ -34,6 +34,12 @@ This repository contains scripts for evaluating models with and without RAG (Ret
    ```bash
    python Hipporag_main.py --<dataset_name>
    ```
-   
+4. Running experiments:
+
+   - To run experiments with custom configurations:
+   Modify the configs in /src/hipporag/utils , which contains:
+      -damping factor
+      -corpus length
+      -configs for custom_ppr
 ## Note: 
 All available datasets for evaluation are stored in the /reproduce/dataset directory. You only need to include the dataset name in the script or command.
