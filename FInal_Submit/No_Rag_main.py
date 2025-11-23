@@ -108,11 +108,13 @@ def main():
     # ]
 
     # For Evaluation
+    """
     gold_answers = [
         ["Politician"],
         ["By going to the ball."],
         ["Rockland County"]
     ]
+    """
 
    # run model
     print("Running QA inference...")
