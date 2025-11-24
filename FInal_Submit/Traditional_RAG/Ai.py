@@ -17,8 +17,21 @@ def generate(query: str, chunks: list[str]) -> str:
     context = "\n\n".join(chunks)
     
     messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}\nAnswer:"}
+        {
+            "role": "system",
+            "content": (
+                "You are a strict answer-only assistant. "
+                "You MUST respond with ONLY the final answer to the question. "
+                "You answers should based SOLELY on the provided context, without adding any additional information."
+                "Do NOT include any explanation, reasoning, or context summary"
+                "Do NOT say 'Based on the context' or 'The answer is'. "
+                "If the answer is not in the context, say 'I don't know' and nothing else."
+            )
+        },
+        {
+            "role": "user",
+            "content": f"Context:\n{context}\n\nQuestion: {query}\nAnswer:"
+        }
     ]
     
     try:
@@ -32,4 +45,5 @@ def generate(query: str, chunks: list[str]) -> str:
         return response.choices[0].message.content.strip()
     except Exception as e:
         return f"API Error: {str(e)}"
+
 
