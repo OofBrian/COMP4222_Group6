@@ -60,7 +60,7 @@ Built for **Chinese/English bilingual support**, local persistence, and easy exp
 | **Vector DB** | ChromaDB (persistent, lightweight) |
 | **Reranking** | PageRank on cosine similarity graph + Cross-Encoder option |
 | **LLM** | DeepSeek (`deepseek-chat`) via API |
-| **Dataset** | HotpotQA (30-sample subset for evaluation) |
+| **Dataset** | HotpotQA |
 | **Evaluation** | Exact Match & F1 (answer-level) |
 
 ---
